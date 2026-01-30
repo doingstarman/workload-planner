@@ -3,12 +3,14 @@
 // DOM Elements
 const tabButtons = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
+let currentPlanningView = 'employee';
 
 // Initialize Application
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initFilters();
     initForms();
+    initPlanningControls();
     updateDashboard();
     renderEmployeesTable();
     renderProjectsGrid();
@@ -163,6 +165,66 @@ function updateEmployeeSelects() {
         option.textContent = `${emp.name} (${workload}%)`;
         select.appendChild(option);
     });
+}
+
+// Planning controls & period
+function initPlanningControls() {
+    const startInput = document.getElementById('planning-start-date');
+    const endInput = document.getElementById('planning-end-date');
+
+    setPlanningPreset('month');
+
+    [startInput, endInput].forEach(input => {
+        if (input) {
+            input.addEventListener('change', () => renderPlanningSection());
+        }
+    });
+
+    document.querySelectorAll('[data-plan-view]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentPlanningView = btn.dataset.planView;
+            document.querySelectorAll('[data-plan-view]').forEach(b => b.classList.toggle('active', b === btn));
+            renderPlanningSection();
+        });
+    });
+}
+
+function setPlanningPreset(preset = 'month') {
+    const startInput = document.getElementById('planning-start-date');
+    const endInput = document.getElementById('planning-end-date');
+    if (!startInput || !endInput) return;
+
+    const today = new Date();
+    let startDate;
+    let endDate;
+
+    if (preset === 'quarter') {
+        const currentQuarter = Math.floor(today.getMonth() / 3);
+        startDate = new Date(today.getFullYear(), currentQuarter * 3, 1);
+        endDate = new Date(today.getFullYear(), currentQuarter * 3 + 3, 0);
+    } else {
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    }
+
+    startInput.value = toISODate(startDate);
+    endInput.value = toISODate(endDate);
+    renderPlanningSection();
+}
+
+function getPlanningPeriod() {
+    const startInput = document.getElementById('planning-start-date');
+    const endInput = document.getElementById('planning-end-date');
+
+    const startDate = startInput?.value ? new Date(startInput.value) : new Date();
+    const endDate = endInput?.value ? new Date(endInput.value) : new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
+
+    if (endDate < startDate) return { startDate, endDate: new Date(startDate) };
+    return { startDate, endDate };
+}
+
+function toISODate(date) {
+    return date.toISOString().split('T')[0];
 }
 
 // ==================== DASHBOARD ====================
@@ -572,10 +634,22 @@ function viewProjectDetails(id) {
 // ==================== PLANNING ====================
 
 function renderPlanningSection() {
-    renderAvailableEmployees();
-    renderAssignmentsTimeline();
     updateEmployeeSelects();
     updateProjectSelects();
+
+    document.querySelectorAll('.planning-view').forEach(view => view.classList.remove('active'));
+
+    if (currentPlanningView === 'department') {
+        const deptView = document.getElementById('department-planning-view');
+        if (deptView) deptView.classList.add('active');
+        renderDepartmentPlanning();
+    } else {
+        const empView = document.getElementById('employee-planning-view');
+        if (empView) empView.classList.add('active');
+        renderAvailableEmployees();
+        renderAssignmentsTimeline();
+        renderEmployeeGantt();
+    }
 }
 
 function renderAvailableEmployees() {
@@ -670,6 +744,267 @@ function renderAssignmentsTimeline() {
             container.appendChild(row);
         });
     });
+}
+
+function renderEmployeeGantt() {
+    const container = document.getElementById('employee-gantt');
+    if (!container) return;
+
+    const { startDate, endDate } = getPlanningPeriod();
+    const assignments = dataStore.getAssignments().filter(a => isAssignmentInPeriod(a, startDate, endDate));
+
+    if (assignments.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">Нет назначений в выбранном периоде</p>';
+        return;
+    }
+
+    const grouped = assignments.reduce((acc, assignment) => {
+        if (!acc[assignment.employeeId]) acc[assignment.employeeId] = [];
+        acc[assignment.employeeId].push(assignment);
+        return acc;
+    }, {});
+
+    const gantt = document.createElement('div');
+    gantt.className = 'gantt';
+    gantt.appendChild(buildGanttHeader(startDate, endDate));
+
+    Object.entries(grouped).forEach(([employeeId, empAssignments]) => {
+        const employee = dataStore.getEmployeeById(parseInt(employeeId));
+        if (!employee) return;
+
+        const bars = empAssignments.map(a => {
+            const project = dataStore.getProjectById(a.projectId);
+            const dept = departments.find(d => d.id === employee.departmentId);
+            const { start, end } = clampToPeriod(a.startDate, a.endDate, startDate, endDate);
+
+            return {
+                label: project ? project.name : 'Проект',
+                meta: `${a.hoursPerWeek} ч/нед`,
+                color: dept ? dept.color : '#6366f1',
+                start,
+                end
+            };
+        }).sort((a, b) => a.start - b.start);
+
+        gantt.appendChild(buildGanttRow(employee.name, bars, startDate, endDate));
+    });
+
+    container.innerHTML = '';
+    const scroll = document.createElement('div');
+    scroll.className = 'gantt-scroll';
+    scroll.appendChild(gantt);
+    container.appendChild(scroll);
+}
+
+function renderDepartmentPlanning() {
+    renderDepartmentSummary();
+    renderDepartmentGantt();
+}
+
+function renderDepartmentSummary() {
+    const container = document.getElementById('department-summary');
+    if (!container) return;
+    const { startDate, endDate } = getPlanningPeriod();
+    const periodDays = diffInDays(startDate, endDate) + 1;
+    const weeksInPeriod = Math.max(1, Math.round(periodDays / 7));
+
+    container.innerHTML = '';
+
+    departments.forEach(dept => {
+        const employees = dataStore.getEmployees().filter(e => e.departmentId === dept.id);
+        const capacityPerWeek = employees.reduce((sum, e) => sum + (e.maxHours || 40), 0);
+        const employeeIds = new Set(employees.map(e => e.id));
+
+        const loadPerWeek = dataStore.getAssignments()
+            .filter(a => employeeIds.has(a.employeeId) && isAssignmentInPeriod(a, startDate, endDate))
+            .reduce((sum, a) => sum + a.hoursPerWeek, 0);
+
+        const utilization = capacityPerWeek > 0 ? Math.round((loadPerWeek / capacityPerWeek) * 100) : 0;
+        const totalHoursForPeriod = loadPerWeek * weeksInPeriod;
+
+        const card = document.createElement('div');
+        card.className = 'department-card';
+        card.innerHTML = `
+            <div class="label">${dept.name}</div>
+            <div class="value">${loadPerWeek} ч/нед • ${utilization}%</div>
+            <div style="color: var(--text-secondary); font-size: 0.9rem;">${totalHoursForPeriod} ч за период</div>
+        `;
+
+        container.appendChild(card);
+    });
+}
+
+function renderDepartmentGantt() {
+    const container = document.getElementById('department-gantt');
+    if (!container) return;
+
+    const { startDate, endDate } = getPlanningPeriod();
+    const assignments = dataStore.getAssignments().filter(a => isAssignmentInPeriod(a, startDate, endDate));
+
+    if (assignments.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">Нет активных назначений в выбранном периоде</p>';
+        return;
+    }
+
+    const groupedByDept = {};
+    assignments.forEach(a => {
+        const employee = dataStore.getEmployeeById(a.employeeId);
+        if (!employee) return;
+        if (!groupedByDept[employee.departmentId]) groupedByDept[employee.departmentId] = [];
+        groupedByDept[employee.departmentId].push(a);
+    });
+
+    const gantt = document.createElement('div');
+    gantt.className = 'gantt';
+    gantt.appendChild(buildGanttHeader(startDate, endDate));
+
+    Object.entries(groupedByDept).forEach(([deptId, deptAssignments]) => {
+        const dept = departments.find(d => d.id === deptId);
+        const projects = {};
+
+        deptAssignments.forEach(a => {
+            const project = dataStore.getProjectById(a.projectId);
+            if (!project) return;
+
+            const { start, end } = clampToPeriod(a.startDate, a.endDate, startDate, endDate);
+            if (!projects[project.id]) {
+                projects[project.id] = {
+                    name: project.name,
+                    start,
+                    end,
+                    hours: 0
+                };
+            } else {
+                projects[project.id].start = projects[project.id].start < start ? projects[project.id].start : start;
+                projects[project.id].end = projects[project.id].end > end ? projects[project.id].end : end;
+            }
+            projects[project.id].hours += a.hoursPerWeek;
+        });
+
+        const bars = Object.values(projects)
+            .map(p => ({
+                label: p.name,
+                meta: `${p.hours} ч/нед`,
+                color: dept ? dept.color : '#4f46e5',
+                start: p.start,
+                end: p.end
+            }))
+            .sort((a, b) => a.start - b.start);
+
+        gantt.appendChild(buildGanttRow(dept ? dept.name : 'Отдел', bars, startDate, endDate));
+    });
+
+    container.innerHTML = '';
+    const scroll = document.createElement('div');
+    scroll.className = 'gantt-scroll';
+    scroll.appendChild(gantt);
+    container.appendChild(scroll);
+}
+
+function buildGanttHeader(startDate, endDate) {
+    const header = document.createElement('div');
+    header.className = 'gantt-header';
+
+    const label = document.createElement('div');
+    label.className = 'gantt-label';
+    label.textContent = 'Период';
+
+    const track = document.createElement('div');
+    track.className = 'gantt-track gantt-track-header';
+
+    const totalDays = diffInDays(startDate, endDate) + 1;
+    const segments = getTimelineSegments(startDate, endDate);
+
+    segments.forEach(seg => {
+        const days = diffInDays(seg.start, seg.end) + 1;
+        const cell = document.createElement('div');
+        cell.className = 'gantt-cell';
+        cell.style.width = `${(days / totalDays) * 100}%`;
+        cell.textContent = `${formatDate(seg.start.toISOString())} — ${formatDate(seg.end.toISOString())}`;
+        track.appendChild(cell);
+    });
+
+    header.appendChild(label);
+    header.appendChild(track);
+    return header;
+}
+
+function buildGanttRow(labelText, bars, startDate, endDate) {
+    const row = document.createElement('div');
+    row.className = 'gantt-row';
+
+    const label = document.createElement('div');
+    label.className = 'gantt-label';
+    label.textContent = labelText;
+
+    const track = document.createElement('div');
+    track.className = 'gantt-track';
+
+    const body = document.createElement('div');
+    body.className = 'gantt-track-body';
+
+    const totalDays = diffInDays(startDate, endDate) + 1;
+    const rowHeight = Math.max(48, bars.length * 34);
+    body.style.height = `${rowHeight}px`;
+
+    bars.forEach((bar, idx) => {
+        const offset = Math.max(0, diffInDays(startDate, bar.start));
+        const widthDays = Math.max(1, diffInDays(bar.start, bar.end) + 1);
+        const barEl = document.createElement('div');
+        barEl.className = 'gantt-bar';
+        barEl.style.left = `${(offset / totalDays) * 100}%`;
+        barEl.style.width = `${(widthDays / totalDays) * 100}%`;
+        barEl.style.top = `${idx * 32 + 8}px`;
+        barEl.style.background = bar.color;
+        barEl.title = `${bar.label}: ${formatDate(bar.start.toISOString())} — ${formatDate(bar.end.toISOString())}`;
+        barEl.innerHTML = `<span>${bar.label}</span><span class="gantt-bar-meta">${bar.meta}</span>`;
+        body.appendChild(barEl);
+    });
+
+    track.appendChild(body);
+    row.appendChild(label);
+    row.appendChild(track);
+    return row;
+}
+
+function getTimelineSegments(startDate, endDate) {
+    const segments = [];
+    let cursor = new Date(startDate);
+    const totalDays = diffInDays(startDate, endDate) + 1;
+    const stepDays = totalDays > 90 ? 14 : 7;
+
+    while (cursor <= endDate) {
+        const next = new Date(cursor);
+        next.setDate(next.getDate() + stepDays - 1);
+        const segmentEnd = next > endDate ? endDate : next;
+        segments.push({ start: new Date(cursor), end: segmentEnd });
+        cursor.setDate(cursor.getDate() + stepDays);
+    }
+
+    return segments;
+}
+
+function clampToPeriod(startStr, endStr, periodStart, periodEnd) {
+    const start = new Date(startStr);
+    const end = endStr ? new Date(endStr) : new Date('2099-12-31');
+
+    return {
+        start: start < periodStart ? new Date(periodStart) : start,
+        end: end > periodEnd ? new Date(periodEnd) : end
+    };
+}
+
+function isAssignmentInPeriod(assignment, periodStart, periodEnd) {
+    const start = new Date(assignment.startDate);
+    const end = assignment.endDate ? new Date(assignment.endDate) : new Date('2099-12-31');
+    return end >= periodStart && start <= periodEnd;
+}
+
+function diffInDays(startDate, endDate) {
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    return Math.floor((end - start) / msPerDay);
 }
 
 function openAssignmentModal() {

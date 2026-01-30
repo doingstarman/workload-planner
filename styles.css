@@ -521,6 +521,68 @@ tr:last-child td {
     margin-bottom: 30px;
 }
 
+.planning-controls {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.toggle-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.toggle-btn {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--background);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.toggle-btn.active {
+    background: rgba(80, 72, 229, 0.1);
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.period-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    color: var(--text-secondary);
+}
+
+.period-controls input[type="date"] {
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.period-preset {
+    display: flex;
+    gap: 8px;
+}
+
+.planning-view {
+    display: none;
+}
+
+.planning-view.active {
+    display: block;
+}
+
 .planning-sidebar {
     background: var(--card-bg);
     border-radius: 12px;
@@ -596,6 +658,18 @@ tr:last-child td {
     box-shadow: var(--shadow);
 }
 
+.planning-main-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.planning-hint {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
 .planning-main h3 {
     margin-bottom: 20px;
 }
@@ -641,6 +715,126 @@ tr:last-child td {
 
 .assignment-actions {
     width: 100px;
+}
+
+.gantt-wrapper {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+}
+
+.gantt-title {
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.gantt-scroll {
+    overflow-x: auto;
+}
+
+.gantt {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 720px;
+}
+
+.gantt-header,
+.gantt-row {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+}
+
+.gantt-label {
+    width: 220px;
+    min-width: 180px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.gantt-track {
+    position: relative;
+    flex: 1;
+    background: var(--background);
+    border-radius: 10px;
+    border: 1px dashed var(--border-color);
+    overflow: hidden;
+}
+
+.gantt-track-header {
+    height: 36px;
+    display: flex;
+}
+
+.gantt-cell {
+    height: 100%;
+    border-left: 1px solid var(--border-color);
+    padding: 8px 6px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.gantt-cell:first-child {
+    border-left: none;
+}
+
+.gantt-track-body {
+    position: relative;
+    min-height: 48px;
+}
+
+.gantt-bar {
+    position: absolute;
+    height: 26px;
+    top: 8px;
+    border-radius: 7px;
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    font-size: 0.85rem;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    backdrop-filter: blur(2px);
+    cursor: default;
+}
+
+.gantt-bar .gantt-bar-meta {
+    opacity: 0.85;
+    font-weight: 600;
+}
+
+.department-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.department-card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow);
+}
+
+.department-card .label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+}
+
+.department-card .value {
+    font-weight: 700;
+    font-size: 1.05rem;
 }
 
 /* Auto Planning */

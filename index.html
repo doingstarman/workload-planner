@@ -131,32 +131,68 @@
                     <button class="btn primary" onclick="openAssignmentModal()">+ Назначить на проект</button>
                 </div>
 
-                <div class="planning-container">
-                    <div class="planning-sidebar">
-                        <h3>Доступные сотрудники</h3>
-                        <div class="available-filter">
-                            <input type="range" id="max-workload-filter" min="0" max="100" value="80">
-                            <span>Макс. загрузка: <span id="max-workload-value">80%</span></span>
-                        </div>
-                        <div id="available-employees" class="employee-list"></div>
+                <div class="planning-controls">
+                    <div class="toggle-group">
+                        <button class="toggle-btn active" data-plan-view="employee">Детально по сотрудникам</button>
+                        <button class="toggle-btn" data-plan-view="department">Верхнеуровневое по отделам</button>
                     </div>
-
-                    <div class="planning-main">
-                        <h3>Текущие назначения</h3>
-                        <div id="assignments-timeline"></div>
+                    <div class="period-controls">
+                        <label>Период:
+                            <input type="date" id="planning-start-date">
+                            <span>—</span>
+                            <input type="date" id="planning-end-date">
+                        </label>
+                        <div class="period-preset">
+                            <button class="btn small secondary" onclick="setPlanningPreset('month')">Месяц</button>
+                            <button class="btn small secondary" onclick="setPlanningPreset('quarter')">Квартал</button>
+                        </div>
                     </div>
                 </div>
 
-                <div class="auto-planning">
-                    <h3>Автоматическое распределение</h3>
-                    <div class="auto-planning-controls">
-                        <select id="auto-plan-project">
-                            <option value="">Выберите проект</option>
-                        </select>
-                        <input type="number" id="required-hours" placeholder="Требуемые часы" min="1">
-                        <button class="btn secondary" onclick="suggestAssignments()">Предложить распределение</button>
+                <div id="employee-planning-view" class="planning-view active">
+                    <div class="planning-container">
+                        <div class="planning-sidebar">
+                            <h3>Доступные сотрудники</h3>
+                            <div class="available-filter">
+                                <input type="range" id="max-workload-filter" min="0" max="100" value="80">
+                                <span>Макс. загрузка: <span id="max-workload-value">80%</span></span>
+                            </div>
+                            <div id="available-employees" class="employee-list"></div>
+                        </div>
+
+                        <div class="planning-main">
+                            <div class="planning-main-header">
+                                <h3>Текущие назначения</h3>
+                                <p class="planning-hint">Нажмите на сотрудника слева для быстрого назначения</p>
+                            </div>
+                            <div id="assignments-timeline"></div>
+                        </div>
                     </div>
-                    <div id="suggestions-container"></div>
+
+                    <div class="gantt-wrapper">
+                        <div class="gantt-title">Диаграмма Ганта (сотрудники)</div>
+                        <div id="employee-gantt"></div>
+                    </div>
+
+                    <div class="auto-planning">
+                        <h3>Автоматическое распределение</h3>
+                        <div class="auto-planning-controls">
+                            <select id="auto-plan-project">
+                                <option value="">Выберите проект</option>
+                            </select>
+                            <input type="number" id="required-hours" placeholder="Требуемые часы" min="1">
+                            <button class="btn secondary" onclick="suggestAssignments()">Предложить распределение</button>
+                        </div>
+                        <div id="suggestions-container"></div>
+                    </div>
+                </div>
+
+                <div id="department-planning-view" class="planning-view">
+                    <div class="department-summary" id="department-summary"></div>
+                    <div class="gantt-wrapper">
+                        <div class="gantt-title">Диаграмма Ганта по отделам</div>
+                        <div id="department-gantt"></div>
+                    </div>
                 </div>
             </section>
 
