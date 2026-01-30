@@ -5,12 +5,34 @@ const tabButtons = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 let currentPlanningView = 'employee';
 
+// Jira state
+const jiraDefaults = {
+    baseUrl: '',
+    username: '',
+    token: '',
+    jql: 'issuetype = Epic ORDER BY created DESC',
+    startField: '',
+    endField: 'duedate',
+    hoursField: 'aggregatetimespent',
+    mappingMode: 'labels',
+    hoursInSeconds: true
+};
+
+const jiraState = {
+    epics: [],
+    selectedEpicKeys: new Set(),
+    loading: false,
+    error: null,
+    lastSync: null
+};
+
 // Initialize Application
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initFilters();
     initForms();
     initPlanningControls();
+    initJiraSection();
     updateDashboard();
     renderEmployeesTable();
     renderProjectsGrid();
@@ -35,6 +57,7 @@ function initTabs() {
             if (tabId === 'employees') renderEmployeesTable();
             if (tabId === 'projects') renderProjectsGrid();
             if (tabId === 'planning') renderPlanningSection();
+            if (tabId === 'jira') renderJiraSection();
             if (tabId === 'reports') generateReport();
         });
     });
@@ -1005,6 +1028,577 @@ function diffInDays(startDate, endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
     return Math.floor((end - start) / msPerDay);
+}
+
+// ==================== JIRA ====================
+
+function initJiraSection() {
+    const settings = loadJiraSettings();
+    applyJiraSettingsToForm(settings);
+    renderJiraMappings();
+    setJiraPreset('year');
+
+    const startInput = document.getElementById('jira-start-date');
+    const endInput = document.getElementById('jira-end-date');
+    if (startInput) startInput.addEventListener('change', renderJiraSection);
+    if (endInput) endInput.addEventListener('change', renderJiraSection);
+}
+
+function loadJiraSettings() {
+    const raw = localStorage.getItem('jiraSettings');
+    if (!raw) return { ...jiraDefaults };
+    try {
+        return { ...jiraDefaults, ...JSON.parse(raw) };
+    } catch {
+        return { ...jiraDefaults };
+    }
+}
+
+function saveJiraSettings() {
+    const settings = readJiraSettingsFromForm();
+    localStorage.setItem('jiraSettings', JSON.stringify(settings));
+    showJiraStatus('Настройки сохранены');
+}
+
+function applyJiraSettingsToForm(settings) {
+    const baseUrl = document.getElementById('jira-base-url');
+    const username = document.getElementById('jira-username');
+    const token = document.getElementById('jira-token');
+    const jql = document.getElementById('jira-jql');
+    const startField = document.getElementById('jira-start-field');
+    const endField = document.getElementById('jira-end-field');
+    const hoursField = document.getElementById('jira-hours-field');
+    const mappingMode = document.getElementById('jira-mapping-mode');
+    const hoursInSeconds = document.getElementById('jira-hours-seconds');
+
+    if (baseUrl) baseUrl.value = settings.baseUrl;
+    if (username) username.value = settings.username;
+    if (token) token.value = settings.token;
+    if (jql) jql.value = settings.jql;
+    if (startField) startField.value = settings.startField;
+    if (endField) endField.value = settings.endField;
+    if (hoursField) hoursField.value = settings.hoursField;
+    if (mappingMode) mappingMode.value = settings.mappingMode;
+    if (hoursInSeconds) hoursInSeconds.checked = settings.hoursInSeconds;
+}
+
+function readJiraSettingsFromForm() {
+    return {
+        baseUrl: document.getElementById('jira-base-url')?.value.trim(),
+        username: document.getElementById('jira-username')?.value.trim(),
+        token: document.getElementById('jira-token')?.value.trim(),
+        jql: document.getElementById('jira-jql')?.value.trim() || jiraDefaults.jql,
+        startField: document.getElementById('jira-start-field')?.value.trim(),
+        endField: document.getElementById('jira-end-field')?.value.trim() || 'duedate',
+        hoursField: document.getElementById('jira-hours-field')?.value.trim() || 'aggregatetimespent',
+        mappingMode: document.getElementById('jira-mapping-mode')?.value || 'labels',
+        hoursInSeconds: !!document.getElementById('jira-hours-seconds')?.checked
+    };
+}
+
+function showJiraStatus(message, type = 'info') {
+    const badge = document.getElementById('jira-status');
+    if (!badge) return;
+    badge.textContent = message;
+    badge.style.color = type === 'error' ? 'var(--danger-color)' : 'var(--text-secondary)';
+}
+
+function getDefaultTeamMapping() {
+    const mapping = {};
+    orgTeams.forEach(team => {
+        mapping[team.id] = `team:${team.id}`;
+    });
+    return mapping;
+}
+
+function getDefaultDepartmentMapping() {
+    const mapping = {};
+    orgDepartments.forEach(dept => {
+        mapping[dept.id] = `dept:${dept.id}`;
+    });
+    return mapping;
+}
+
+function loadMapping(key, fallback) {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    try {
+        return { ...fallback, ...JSON.parse(raw) };
+    } catch {
+        return fallback;
+    }
+}
+
+function saveMapping(key, mapping) {
+    localStorage.setItem(key, JSON.stringify(mapping));
+}
+
+function renderJiraMappings() {
+    const teamContainer = document.getElementById('jira-team-mapping');
+    const deptContainer = document.getElementById('jira-department-mapping');
+    if (!teamContainer || !deptContainer) return;
+
+    const teamMapping = loadMapping('jiraTeamMapping', getDefaultTeamMapping());
+    const deptMapping = loadMapping('jiraDepartmentMapping', getDefaultDepartmentMapping());
+
+    teamContainer.innerHTML = '';
+    orgTeams.forEach(team => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mapping-item';
+        wrapper.innerHTML = `
+            <label>${team.name}</label>
+            <input type="text" value="${teamMapping[team.id] || ''}" data-team-id="${team.id}">
+        `;
+        teamContainer.appendChild(wrapper);
+    });
+
+    deptContainer.innerHTML = '';
+    orgDepartments.forEach(dept => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mapping-item';
+        wrapper.innerHTML = `
+            <label>${dept.name}</label>
+            <input type="text" value="${deptMapping[dept.id] || ''}" data-dept-id="${dept.id}">
+        `;
+        deptContainer.appendChild(wrapper);
+    });
+
+    teamContainer.querySelectorAll('input').forEach(input => {
+        input.addEventListener('change', () => {
+            const id = input.dataset.teamId;
+            teamMapping[id] = input.value.trim();
+            saveMapping('jiraTeamMapping', teamMapping);
+        });
+    });
+
+    deptContainer.querySelectorAll('input').forEach(input => {
+        input.addEventListener('change', () => {
+            const id = input.dataset.deptId;
+            deptMapping[id] = input.value.trim();
+            saveMapping('jiraDepartmentMapping', deptMapping);
+        });
+    });
+}
+
+function setJiraPreset(preset = 'year') {
+    const startInput = document.getElementById('jira-start-date');
+    const endInput = document.getElementById('jira-end-date');
+    if (!startInput || !endInput) return;
+
+    const today = new Date();
+    let startDate;
+    let endDate;
+
+    if (preset === 'quarter') {
+        const currentQuarter = Math.floor(today.getMonth() / 3);
+        startDate = new Date(today.getFullYear(), currentQuarter * 3, 1);
+        endDate = new Date(today.getFullYear(), currentQuarter * 3 + 3, 0);
+    } else {
+        startDate = new Date(today.getFullYear(), 0, 1);
+        endDate = new Date(today.getFullYear(), 11, 31);
+    }
+
+    startInput.value = toISODate(startDate);
+    endInput.value = toISODate(endDate);
+    renderJiraSection();
+}
+
+function getJiraPeriod(epics = []) {
+    const startInput = document.getElementById('jira-start-date');
+    const endInput = document.getElementById('jira-end-date');
+    let startDate = startInput?.value ? new Date(startInput.value) : null;
+    let endDate = endInput?.value ? new Date(endInput.value) : null;
+
+    if ((!startDate || !endDate) && epics.length > 0) {
+        const dates = epics.flatMap(epic => [epic.startDate, epic.endDate]).filter(Boolean);
+        if (dates.length > 0) {
+            const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+            const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+            if (!startDate) startDate = minDate;
+            if (!endDate) endDate = maxDate;
+        }
+    }
+
+    if (!startDate) startDate = new Date();
+    if (!endDate) endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
+
+    if (endDate < startDate) endDate = new Date(startDate);
+    return { startDate, endDate };
+}
+
+async function testJiraConnection() {
+    try {
+        const settings = readJiraSettingsFromForm();
+        if (!settings.baseUrl) {
+            showJiraStatus('Укажите Base URL', 'error');
+            return;
+        }
+        await jiraFetch(`${settings.baseUrl}/rest/api/2/serverInfo`, settings);
+        showJiraStatus('Подключение успешно');
+    } catch (error) {
+        showJiraStatus('Ошибка подключения', 'error');
+    }
+}
+
+async function loadJiraData() {
+    try {
+        const settings = readJiraSettingsFromForm();
+        if (!settings.baseUrl) {
+            showJiraStatus('Укажите Base URL', 'error');
+            return;
+        }
+
+        saveJiraSettings();
+        showJiraStatus('Загрузка...');
+        jiraState.loading = true;
+
+        const epics = await searchJiraEpics(settings);
+        jiraState.epics = epics;
+        jiraState.selectedEpicKeys = new Set(epics.map(e => e.key));
+        jiraState.lastSync = new Date();
+        jiraState.error = null;
+        jiraState.loading = false;
+
+        showJiraStatus(`Загружено эпиков: ${epics.length}`);
+        renderJiraSection();
+    } catch (error) {
+        jiraState.loading = false;
+        jiraState.error = error;
+        showJiraStatus('Ошибка загрузки', 'error');
+        renderJiraSection();
+    }
+}
+
+function renderJiraSection() {
+    renderJiraEpicsList();
+    renderJiraHoursTable();
+    renderJiraGantts();
+}
+
+function renderJiraEpicsList() {
+    const container = document.getElementById('jira-epics-list');
+    if (!container) return;
+
+    container.innerHTML = '';
+    if (jiraState.epics.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">Нет данных. Загрузите эпики из Jira.</p>';
+        return;
+    }
+
+    jiraState.epics.forEach(epic => {
+        const item = document.createElement('div');
+        item.className = 'jira-epic-item';
+        const checked = jiraState.selectedEpicKeys.has(epic.key);
+        item.innerHTML = `
+            <label class="checkbox">
+                <input type="checkbox" data-epic-key="${epic.key}" ${checked ? 'checked' : ''}>
+                <span class="jira-epic-title">${epic.key} — ${epic.summary}</span>
+            </label>
+            <span>${epic.spentHours.toFixed(1)} ч</span>
+        `;
+        container.appendChild(item);
+    });
+
+    container.querySelectorAll('input[type="checkbox"]').forEach(input => {
+        input.addEventListener('change', () => {
+            const key = input.dataset.epicKey;
+            if (input.checked) {
+                jiraState.selectedEpicKeys.add(key);
+            } else {
+                jiraState.selectedEpicKeys.delete(key);
+            }
+            renderJiraHoursTable();
+        });
+    });
+}
+
+function selectAllEpics() {
+    jiraState.selectedEpicKeys = new Set(jiraState.epics.map(e => e.key));
+    renderJiraSection();
+}
+
+function clearEpicSelection() {
+    jiraState.selectedEpicKeys.clear();
+    renderJiraSection();
+}
+
+function renderJiraHoursTable() {
+    const summary = document.getElementById('jira-hours-summary');
+    const container = document.getElementById('jira-hours-table');
+    if (!summary || !container) return;
+
+    const selected = jiraState.epics.filter(epic => jiraState.selectedEpicKeys.has(epic.key));
+    if (selected.length === 0) {
+        summary.innerHTML = '<span>Выберите проекты, чтобы увидеть трудозатраты.</span>';
+        container.innerHTML = '';
+        return;
+    }
+
+    const teamMapping = loadMapping('jiraTeamMapping', getDefaultTeamMapping());
+    const deptMapping = loadMapping('jiraDepartmentMapping', getDefaultDepartmentMapping());
+    const settings = readJiraSettingsFromForm();
+
+    const teamTotals = new Map();
+    const deptTotals = new Map();
+    let totalHours = 0;
+
+    selected.forEach(epic => {
+        totalHours += epic.spentHours;
+        const teams = getEpicTeams(epic, teamMapping, settings);
+        const departments = getEpicDepartments(epic, deptMapping, settings, teams);
+
+        const teamPortion = teams.length > 0 ? epic.spentHours / teams.length : 0;
+        teams.forEach(team => {
+            teamTotals.set(team.id, (teamTotals.get(team.id) || 0) + teamPortion);
+        });
+
+        const deptPortion = departments.length > 0 ? epic.spentHours / departments.length : 0;
+        departments.forEach(dept => {
+            deptTotals.set(dept.id, (deptTotals.get(dept.id) || 0) + deptPortion);
+        });
+    });
+
+    summary.innerHTML = `
+        <span>Проектов: ${selected.length}</span>
+        <span>Суммарно: ${totalHours.toFixed(1)} ч</span>
+    `;
+
+    const rows = [];
+    rows.push('<table><thead><tr><th>Команда / Отдел</th><th>Часы</th></tr></thead><tbody>');
+
+    orgTeams.forEach(team => {
+        const value = teamTotals.get(team.id);
+        if (value) {
+            rows.push(`<tr><td>${team.name}</td><td>${value.toFixed(1)}</td></tr>`);
+        }
+    });
+
+    orgDepartments.forEach(dept => {
+        const value = deptTotals.get(dept.id);
+        if (value) {
+            rows.push(`<tr><td>${dept.name}</td><td>${value.toFixed(1)}</td></tr>`);
+        }
+    });
+
+    rows.push('</tbody></table>');
+    container.innerHTML = rows.join('');
+}
+
+function renderJiraGantts() {
+    const { startDate, endDate } = getJiraPeriod(jiraState.epics);
+
+    renderProjectsGantt(startDate, endDate);
+    renderTeamsGantt(startDate, endDate);
+    renderDepartmentsGantt(startDate, endDate);
+}
+
+function renderProjectsGantt(startDate, endDate) {
+    const rows = jiraState.epics
+        .filter(epic => epic.startDate && epic.endDate)
+        .sort((a, b) => a.startDate - b.startDate)
+        .map(epic => ({
+            label: `${epic.key}`,
+            bars: [
+                {
+                    label: epic.summary,
+                    meta: `${epic.spentHours.toFixed(1)} ч`,
+                    start: epic.startDate,
+                    end: epic.endDate,
+                    color: '#6366f1'
+                }
+            ]
+        }));
+
+    renderGenericGantt('jira-projects-gantt', rows, startDate, endDate);
+}
+
+function renderTeamsGantt(startDate, endDate) {
+    const settings = readJiraSettingsFromForm();
+    const teamMapping = loadMapping('jiraTeamMapping', getDefaultTeamMapping());
+
+    const rows = orgTeams.map(team => {
+        const bars = jiraState.epics
+            .filter(epic => getEpicTeams(epic, teamMapping, settings).some(t => t.id === team.id))
+            .map(epic => ({
+                label: epic.key,
+                meta: `${epic.spentHours.toFixed(1)} ч`,
+                start: epic.startDate,
+                end: epic.endDate,
+                color: '#4f46e5'
+            }));
+        return { label: team.name, bars };
+    }).filter(row => row.bars.length > 0);
+
+    renderGenericGantt('jira-teams-gantt', rows, startDate, endDate);
+}
+
+function renderDepartmentsGantt(startDate, endDate) {
+    const settings = readJiraSettingsFromForm();
+    const teamMapping = loadMapping('jiraTeamMapping', getDefaultTeamMapping());
+    const deptMapping = loadMapping('jiraDepartmentMapping', getDefaultDepartmentMapping());
+
+    const rows = orgDepartments.map(dept => {
+        const relatedEpics = jiraState.epics.filter(epic => {
+            const departments = getEpicDepartments(epic, deptMapping, settings, getEpicTeams(epic, teamMapping, settings));
+            return departments.some(d => d.id === dept.id);
+        });
+
+        if (relatedEpics.length === 0) return null;
+
+        const start = new Date(Math.min(...relatedEpics.map(e => e.startDate?.getTime() || Date.now())));
+        const end = new Date(Math.max(...relatedEpics.map(e => e.endDate?.getTime() || Date.now())));
+        const bars = [{
+            label: `${relatedEpics.length} проектов`,
+            meta: 'План отдела',
+            start,
+            end,
+            color: dept.color
+        }];
+
+        return { label: dept.name, bars };
+    }).filter(Boolean);
+
+    renderGenericGantt('jira-departments-gantt', rows, startDate, endDate);
+}
+
+function renderGenericGantt(containerId, rows, startDate, endDate) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!rows || rows.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">Нет данных для отображения</p>';
+        return;
+    }
+
+    const gantt = document.createElement('div');
+    gantt.className = 'gantt';
+    gantt.appendChild(buildGanttHeader(startDate, endDate));
+
+    rows.forEach(row => {
+        gantt.appendChild(buildGanttRow(row.label, row.bars, startDate, endDate));
+    });
+
+    container.innerHTML = '';
+    const scroll = document.createElement('div');
+    scroll.className = 'gantt-scroll';
+    scroll.appendChild(gantt);
+    container.appendChild(scroll);
+}
+
+function getEpicTeams(epic, teamMapping, settings) {
+    return orgTeams.filter(team => matchEpic(epic, teamMapping[team.id], settings.mappingMode));
+}
+
+function getEpicDepartments(epic, deptMapping, settings, teams = []) {
+    const derived = teams.length > 0
+        ? [...new Set(teams.map(t => t.departmentId))].map(id => orgDepartments.find(d => d.id === id)).filter(Boolean)
+        : [];
+
+    if (derived.length > 0) return derived;
+    return orgDepartments.filter(dept => matchEpic(epic, deptMapping[dept.id], settings.mappingMode));
+}
+
+function matchEpic(epic, mappingValue, mode) {
+    if (!mappingValue) return false;
+    if (mode === 'components') {
+        return epic.components.includes(mappingValue);
+    }
+    if (mode === 'project') {
+        return epic.projectKey === mappingValue || epic.projectName === mappingValue;
+    }
+    return epic.labels.includes(mappingValue);
+}
+
+async function searchJiraEpics(settings) {
+    const fields = [
+        'summary',
+        'status',
+        'priority',
+        'labels',
+        'components',
+        'project',
+        'created',
+        'duedate',
+        settings.startField,
+        settings.endField,
+        settings.hoursField
+    ].filter(Boolean);
+
+    const uniqueFields = [...new Set(fields)].join(',');
+    let startAt = 0;
+    const maxResults = 100;
+    const allIssues = [];
+
+    while (true) {
+        const url = `${settings.baseUrl}/rest/api/2/search?jql=${encodeURIComponent(settings.jql)}&startAt=${startAt}&maxResults=${maxResults}&fields=${encodeURIComponent(uniqueFields)}`;
+        const data = await jiraFetch(url, settings);
+        allIssues.push(...(data.issues || []));
+
+        if (startAt + maxResults >= data.total) break;
+        startAt += maxResults;
+    }
+
+    return allIssues.map(issue => mapJiraEpic(issue, settings));
+}
+
+async function jiraFetch(url, settings) {
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+
+    if (settings.username || settings.token) {
+        headers.Authorization = `Basic ${btoa(`${settings.username}:${settings.token}`)}`;
+    }
+
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+        throw new Error(`Jira error: ${response.status}`);
+    }
+    return response.json();
+}
+
+function mapJiraEpic(issue, settings) {
+    const fields = issue.fields || {};
+    const startValue = settings.startField ? fields[settings.startField] : fields.created;
+    const endValue = settings.endField ? fields[settings.endField] : fields.duedate;
+
+    const startDate = parseJiraDate(startValue) || parseJiraDate(fields.created);
+    const endDate = parseJiraDate(endValue) || startDate;
+    const rawHours = settings.hoursField ? fields[settings.hoursField] : (fields.aggregatetimespent || fields.timespent);
+
+    return {
+        id: issue.id,
+        key: issue.key,
+        summary: fields.summary || issue.key,
+        status: fields.status?.name || '',
+        priority: fields.priority?.name || '',
+        startDate,
+        endDate,
+        labels: fields.labels || [],
+        components: (fields.components || []).map(c => c.name),
+        projectKey: fields.project?.key,
+        projectName: fields.project?.name,
+        spentHours: normalizeJiraHours(rawHours, settings.hoursInSeconds)
+    };
+}
+
+function parseJiraDate(value) {
+    if (!value) return null;
+    if (typeof value === 'string') return new Date(value);
+    if (typeof value === 'number') return new Date(value);
+    if (value.value) return new Date(value.value);
+    if (value.startDate) return new Date(value.startDate);
+    return null;
+}
+
+function normalizeJiraHours(raw, inSeconds) {
+    if (!raw && raw !== 0) return 0;
+    let value = raw;
+    if (typeof raw === 'object') {
+        value = raw.value ?? raw.seconds ?? raw.timeSpent ?? 0;
+    }
+    const hours = inSeconds ? value / 3600 : value;
+    return Math.round(hours * 10) / 10;
 }
 
 function openAssignmentModal() {

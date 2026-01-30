@@ -31,6 +31,24 @@ const roles = [
     { id: 'devops', name: 'DevOps инженер', color: '#14b8a6' }
 ];
 
+// Организационная структура для Jira
+const orgDepartments = [
+    { id: 'dev', name: 'Разработка', color: '#4f46e5' },
+    { id: 'analytics', name: 'Аналитика', color: '#10b981' },
+    { id: 'product', name: 'Продукт', color: '#f59e0b' },
+    { id: 'qa', name: 'Тестирование', color: '#ef4444' }
+];
+
+const orgTeams = [
+    { id: 'dev-team-1', name: 'Команда разработки 1', departmentId: 'dev' },
+    { id: 'dev-team-2', name: 'Команда разработки 2', departmentId: 'dev' },
+    { id: 'dev-team-3', name: 'Команда разработки 3', departmentId: 'dev' },
+    { id: 'dev-team-4', name: 'Команда разработки 4', departmentId: 'dev' },
+    { id: 'dev-team-5', name: 'Команда разработки 5', departmentId: 'dev' },
+    { id: 'dev-team-6', name: 'Команда разработки 6', departmentId: 'dev' },
+    { id: 'dev-team-7', name: 'Команда разработки 7', departmentId: 'dev' }
+];
+
 // Test Employees
 const initialEmployees = [
     // Desktop Department

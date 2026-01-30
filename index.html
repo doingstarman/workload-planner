@@ -18,6 +18,7 @@
             <button class="tab-btn" data-tab="employees">👥 Сотрудники</button>
             <button class="tab-btn" data-tab="projects">📁 Проекты</button>
             <button class="tab-btn" data-tab="planning">📅 Планирование</button>
+            <button class="tab-btn" data-tab="jira">🧩 Jira</button>
             <button class="tab-btn" data-tab="reports">📈 Отчёты</button>
         </nav>
 
@@ -193,6 +194,131 @@
                         <div class="gantt-title">Диаграмма Ганта по отделам</div>
                         <div id="department-gantt"></div>
                     </div>
+                </div>
+            </section>
+
+            <!-- Jira Tab -->
+            <section id="jira" class="tab-content">
+                <div class="section-header">
+                    <h2>Jira: планирование и трудозатраты</h2>
+                    <div class="header-actions">
+                        <button class="btn secondary" onclick="testJiraConnection()">Проверить подключение</button>
+                        <button class="btn primary" onclick="loadJiraData()">Загрузить данные</button>
+                    </div>
+                </div>
+
+                <div class="jira-grid">
+                    <div class="jira-card">
+                        <h3>Настройки Jira</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Base URL</label>
+                                <input type="text" id="jira-base-url" placeholder="https://jira.company.local">
+                            </div>
+                            <div class="form-group">
+                                <label>Пользователь</label>
+                                <input type="text" id="jira-username" placeholder="user@company.local">
+                            </div>
+                            <div class="form-group">
+                                <label>Пароль / Токен</label>
+                                <input type="password" id="jira-token" placeholder="••••••••">
+                            </div>
+                            <div class="form-group">
+                                <label>JQL для эпиков</label>
+                                <input type="text" id="jira-jql" placeholder="issuetype = Epic ORDER BY created DESC">
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Поле начала</label>
+                                <input type="text" id="jira-start-field" placeholder="customfield_10015">
+                            </div>
+                            <div class="form-group">
+                                <label>Поле окончания</label>
+                                <input type="text" id="jira-end-field" placeholder="duedate">
+                            </div>
+                            <div class="form-group">
+                                <label>Поле часов</label>
+                                <input type="text" id="jira-hours-field" placeholder="aggregatetimespent">
+                            </div>
+                            <div class="form-group">
+                                <label>Маппинг</label>
+                                <select id="jira-mapping-mode">
+                                    <option value="labels">По меткам (labels)</option>
+                                    <option value="components">По компонентам</option>
+                                    <option value="project">По проектам Jira</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <label class="checkbox">
+                                <input type="checkbox" id="jira-hours-seconds" checked>
+                                Часы в секундах (переводить в часы)
+                            </label>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn secondary" onclick="saveJiraSettings()">Сохранить настройки</button>
+                            <span id="jira-status" class="status-badge"></span>
+                        </div>
+                        <p class="hint">Если Jira не отдаёт данные из браузера, включите CORS на сервере Jira или используйте корпоративный прокси.</p>
+                    </div>
+
+                    <div class="jira-card">
+                        <h3>Маппинг команд и отделов</h3>
+                        <div class="mapping-grid">
+                            <div>
+                                <h4>Команды разработки</h4>
+                                <div id="jira-team-mapping"></div>
+                            </div>
+                            <div>
+                                <h4>Отделы</h4>
+                                <div id="jira-department-mapping"></div>
+                            </div>
+                        </div>
+                        <p class="hint">Пример меток: team:dev-team-1, dept:analytics</p>
+                    </div>
+                </div>
+
+                <div class="jira-grid">
+                    <div class="jira-card">
+                        <h3>Проекты (эпики)</h3>
+                        <div class="jira-epics-controls">
+                            <label>Период:
+                                <input type="date" id="jira-start-date">
+                                <span>—</span>
+                                <input type="date" id="jira-end-date">
+                            </label>
+                            <div class="period-preset">
+                                <button class="btn small secondary" onclick="setJiraPreset('year')">Год</button>
+                                <button class="btn small secondary" onclick="setJiraPreset('quarter')">Квартал</button>
+                            </div>
+                        </div>
+                        <div class="jira-epics-toolbar">
+                            <button class="btn small secondary" onclick="selectAllEpics()">Выбрать все</button>
+                            <button class="btn small secondary" onclick="clearEpicSelection()">Сбросить</button>
+                        </div>
+                        <div id="jira-epics-list" class="jira-epics-list"></div>
+                    </div>
+                    <div class="jira-card">
+                        <h3>Ресурсы по выбранным проектам</h3>
+                        <div id="jira-hours-summary" class="jira-hours-summary"></div>
+                        <div id="jira-hours-table" class="jira-hours-table"></div>
+                    </div>
+                </div>
+
+                <div class="gantt-wrapper">
+                    <div class="gantt-title">Диаграмма Ганта — проекты (эпики)</div>
+                    <div id="jira-projects-gantt"></div>
+                </div>
+
+                <div class="gantt-wrapper">
+                    <div class="gantt-title">Диаграмма Ганта — команды разработки</div>
+                    <div id="jira-teams-gantt"></div>
+                </div>
+
+                <div class="gantt-wrapper">
+                    <div class="gantt-title">Диаграмма Ганта — отделы</div>
+                    <div id="jira-departments-gantt"></div>
                 </div>
             </section>
 
