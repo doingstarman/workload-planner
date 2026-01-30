@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система планирования нагрузки сотрудников</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏢 Система планирования нагрузки</h1>
+            <p class="subtitle">IT Company Workload Management</p>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="dashboard">📊 Дашборд</button>
+            <button class="tab-btn" data-tab="employees">👥 Сотрудники</button>
+            <button class="tab-btn" data-tab="projects">📁 Проекты</button>
+            <button class="tab-btn" data-tab="planning">📅 Планирование</button>
+            <button class="tab-btn" data-tab="reports">📈 Отчёты</button>
+        </nav>
+
+        <main>
+            <!-- Dashboard Tab -->
+            <section id="dashboard" class="tab-content active">
+                <div class="dashboard-grid">
+                    <div class="stat-card">
+                        <h3>Всего сотрудников</h3>
+                        <span class="stat-number" id="total-employees">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Активных проектов</h3>
+                        <span class="stat-number" id="active-projects">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Средняя загрузка</h3>
+                        <span class="stat-number" id="avg-workload">0%</span>
+                    </div>
+                    <div class="stat-card warning">
+                        <h3>Перегруженные</h3>
+                        <span class="stat-number" id="overloaded">0</span>
+                    </div>
+                </div>
+
+                <div class="dashboard-charts">
+                    <div class="chart-container">
+                        <h3>Загрузка по отделам</h3>
+                        <div id="department-chart" class="chart"></div>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Распределение по ролям</h3>
+                        <div id="role-chart" class="chart"></div>
+                    </div>
+                </div>
+
+                <div class="workload-overview">
+                    <h3>Обзор загрузки сотрудников</h3>
+                    <div id="workload-bars"></div>
+                </div>
+            </section>
+
+            <!-- Employees Tab -->
+            <section id="employees" class="tab-content">
+                <div class="section-header">
+                    <h2>Управление сотрудниками</h2>
+                    <button class="btn primary" onclick="openEmployeeModal()">+ Добавить сотрудника</button>
+                </div>
+
+                <div class="filters">
+                    <select id="filter-department">
+                        <option value="">Все отделы</option>
+                    </select>
+                    <select id="filter-team">
+                        <option value="">Все команды</option>
+                    </select>
+                    <select id="filter-role">
+                        <option value="">Все роли</option>
+                    </select>
+                    <input type="text" id="search-employee" placeholder="Поиск по имени...">
+                </div>
+
+                <div class="table-container">
+                    <table id="employees-table">
+                        <thead>
+                            <tr>
+                                <th>Имя</th>
+                                <th>Отдел</th>
+                                <th>Команда</th>
+                                <th>Роль</th>
+                                <th>Загрузка</th>
+                                <th>Проекты</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Projects Tab -->
+            <section id="projects" class="tab-content">
+                <div class="section-header">
+                    <h2>Управление проектами</h2>
+                    <button class="btn primary" onclick="openProjectModal()">+ Добавить проект</button>
+                </div>
+
+                <div class="filters">
+                    <select id="filter-project-status">
+                        <option value="">Все статусы</option>
+                        <option value="planning">Планирование</option>
+                        <option value="active">Активный</option>
+                        <option value="on-hold">На паузе</option>
+                        <option value="completed">Завершён</option>
+                    </select>
+                    <select id="filter-project-priority">
+                        <option value="">Все приоритеты</option>
+                        <option value="high">Высокий</option>
+                        <option value="medium">Средний</option>
+                        <option value="low">Низкий</option>
+                    </select>
+                </div>
+
+                <div class="projects-grid" id="projects-grid"></div>
+            </section>
+
+            <!-- Planning Tab -->
+            <section id="planning" class="tab-content">
+                <div class="section-header">
+                    <h2>Планирование нагрузки</h2>
+                    <button class="btn primary" onclick="openAssignmentModal()">+ Назначить на проект</button>
+                </div>
+
+                <div class="planning-container">
+                    <div class="planning-sidebar">
+                        <h3>Доступные сотрудники</h3>
+                        <div class="available-filter">
+                            <input type="range" id="max-workload-filter" min="0" max="100" value="80">
+                            <span>Макс. загрузка: <span id="max-workload-value">80%</span></span>
+                        </div>
+                        <div id="available-employees" class="employee-list"></div>
+                    </div>
+
+                    <div class="planning-main">
+                        <h3>Текущие назначения</h3>
+                        <div id="assignments-timeline"></div>
+                    </div>
+                </div>
+
+                <div class="auto-planning">
+                    <h3>Автоматическое распределение</h3>
+                    <div class="auto-planning-controls">
+                        <select id="auto-plan-project">
+                            <option value="">Выберите проект</option>
+                        </select>
+                        <input type="number" id="required-hours" placeholder="Требуемые часы" min="1">
+                        <button class="btn secondary" onclick="suggestAssignments()">Предложить распределение</button>
+                    </div>
+                    <div id="suggestions-container"></div>
+                </div>
+            </section>
+
+            <!-- Reports Tab -->
+            <section id="reports" class="tab-content">
+                <div class="section-header">
+                    <h2>Отчёты и аналитика</h2>
+                    <button class="btn secondary" onclick="exportReport()">📥 Экспорт отчёта</button>
+                </div>
+
+                <div class="report-filters">
+                    <label>
+                        Период:
+                        <input type="date" id="report-start-date">
+                        <span>—</span>
+                        <input type="date" id="report-end-date">
+                    </label>
+                    <button class="btn primary" onclick="generateReport()">Сформировать отчёт</button>
+                </div>
+
+                <div class="reports-grid">
+                    <div class="report-card">
+                        <h3>Загрузка по отделам</h3>
+                        <div id="report-departments"></div>
+                    </div>
+                    <div class="report-card">
+                        <h3>Топ загруженных сотрудников</h3>
+                        <div id="report-top-loaded"></div>
+                    </div>
+                    <div class="report-card">
+                        <h3>Недозагруженные сотрудники</h3>
+                        <div id="report-underloaded"></div>
+                    </div>
+                    <div class="report-card">
+                        <h3>Статистика по проектам</h3>
+                        <div id="report-projects"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Employee Modal -->
+    <div id="employee-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('employee-modal')">&times;</span>
+            <h2 id="employee-modal-title">Добавить сотрудника</h2>
+            <form id="employee-form">
+                <input type="hidden" id="employee-id">
+                <div class="form-group">
+                    <label>Имя</label>
+                    <input type="text" id="employee-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Отдел</label>
+                    <select id="employee-department" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Команда</label>
+                    <select id="employee-team" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Роль</label>
+                    <select id="employee-role" required>
+                        <option value="developer">Разработчик</option>
+                        <option value="senior-developer">Старший разработчик</option>
+                        <option value="team-lead">Тимлид</option>
+                        <option value="product-manager">Продакт-менеджер</option>
+                        <option value="system-analyst">Системный аналитик</option>
+                        <option value="qa-engineer">QA инженер</option>
+                        <option value="devops">DevOps инженер</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Макс. часов в неделю</label>
+                    <input type="number" id="employee-max-hours" value="40" min="1" max="60">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn secondary" onclick="closeModal('employee-modal')">Отмена</button>
+                    <button type="submit" class="btn primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Project Modal -->
+    <div id="project-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('project-modal')">&times;</span>
+            <h2 id="project-modal-title">Добавить проект</h2>
+            <form id="project-form">
+                <input type="hidden" id="project-id">
+                <div class="form-group">
+                    <label>Название</label>
+                    <input type="text" id="project-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Описание</label>
+                    <textarea id="project-description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Статус</label>
+                    <select id="project-status">
+                        <option value="planning">Планирование</option>
+                        <option value="active">Активный</option>
+                        <option value="on-hold">На паузе</option>
+                        <option value="completed">Завершён</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Приоритет</label>
+                    <select id="project-priority">
+                        <option value="high">Высокий</option>
+                        <option value="medium">Средний</option>
+                        <option value="low">Низкий</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Дата начала</label>
+                        <input type="date" id="project-start-date">
+                    </div>
+                    <div class="form-group">
+                        <label>Дата окончания</label>
+                        <input type="date" id="project-end-date">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Требуемые часы</label>
+                    <input type="number" id="project-required-hours" min="1">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn secondary" onclick="closeModal('project-modal')">Отмена</button>
+                    <button type="submit" class="btn primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Assignment Modal -->
+    <div id="assignment-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('assignment-modal')">&times;</span>
+            <h2>Назначить на проект</h2>
+            <form id="assignment-form">
+                <div class="form-group">
+                    <label>Сотрудник</label>
+                    <select id="assignment-employee" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Проект</label>
+                    <select id="assignment-project" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Часов в неделю</label>
+                    <input type="number" id="assignment-hours" min="1" max="40" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Дата начала</label>
+                        <input type="date" id="assignment-start-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Дата окончания</label>
+                        <input type="date" id="assignment-end-date">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Роль в проекте</label>
+                    <input type="text" id="assignment-role" placeholder="Например: Backend разработчик">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn secondary" onclick="closeModal('assignment-modal')">Отмена</button>
+                    <button type="submit" class="btn primary">Назначить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

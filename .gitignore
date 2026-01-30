@@ -1,0 +1,22 @@
+﻿# Node / package managers
+node_modules/
+
+# Logs
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Env
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Build output
+/dist/
+/build/
