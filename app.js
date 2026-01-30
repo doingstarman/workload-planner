@@ -1269,6 +1269,17 @@ async function loadJiraData() {
     }
 }
 
+function loadJiraDemoData() {
+    const demo = buildJiraDemoEpics();
+    jiraState.epics = demo;
+    jiraState.selectedEpicKeys = new Set(demo.map(e => e.key));
+    jiraState.lastSync = new Date();
+    jiraState.error = null;
+    jiraState.loading = false;
+    showJiraStatus(`Демо: ${demo.length} эпиков`);
+    renderJiraSection();
+}
+
 function renderJiraSection() {
     renderJiraEpicsList();
     renderJiraHoursTable();
@@ -1599,6 +1610,45 @@ function normalizeJiraHours(raw, inSeconds) {
     }
     const hours = inSeconds ? value / 3600 : value;
     return Math.round(hours * 10) / 10;
+}
+
+function buildJiraDemoEpics() {
+    const year = new Date().getFullYear();
+    const d = (month, day) => new Date(year, month - 1, day);
+
+    const makeEpic = (idx, key, summary, start, end, hours, labels = [], components = []) => ({
+        id: `demo-${idx}`,
+        key,
+        summary,
+        status: 'In Progress',
+        priority: 'Medium',
+        startDate: start,
+        endDate: end,
+        labels,
+        components,
+        projectKey: 'PLN',
+        projectName: 'Workload Planner',
+        spentHours: hours
+    });
+
+    const epics = [
+        makeEpic(1, 'PLN-101', 'Refactor Platform Core', d(1, 10), d(3, 25), 420, ['team:dev-team-1']),
+        makeEpic(2, 'PLN-102', 'Billing API Upgrade', d(3, 28), d(6, 15), 520, ['team:dev-team-1']),
+        makeEpic(3, 'PLN-201', 'Mobile UX Refresh', d(2, 5), d(4, 30), 380, ['team:dev-team-2']),
+        makeEpic(4, 'PLN-202', 'Mobile Payments', d(5, 3), d(8, 20), 610, ['team:dev-team-2']),
+        makeEpic(5, 'PLN-301', 'Analytics Warehouse', d(1, 20), d(5, 10), 700, ['team:dev-team-3', 'dept:analytics']),
+        makeEpic(6, 'PLN-401', 'Partner Integrations', d(4, 1), d(7, 5), 560, ['team:dev-team-4']),
+        makeEpic(7, 'PLN-402', 'Legacy Migration Phase 2', d(7, 10), d(10, 30), 780, ['team:dev-team-4']),
+        makeEpic(8, 'PLN-501', 'Search Platform', d(7, 15), d(10, 31), 640, ['team:dev-team-5']),
+        makeEpic(9, 'PLN-601', 'Infra Modernization', d(9, 1), d(12, 20), 560, ['team:dev-team-6']),
+        makeEpic(10, 'PLN-701', 'AI Assistant Beta', d(2, 1), d(12, 15), 980, ['team:dev-team-7']),
+        makeEpic(11, 'ANL-10', 'Customer Insights H1', d(1, 15), d(6, 30), 320, ['dept:analytics']),
+        makeEpic(12, 'PRD-22', 'Product Discovery 2026', d(1, 10), d(12, 20), 260, ['dept:product']),
+        makeEpic(13, 'QA-15', 'QA Automation Program', d(2, 10), d(11, 30), 540, ['dept:qa']),
+        makeEpic(14, 'PLN-777', 'Release Stabilization', d(9, 15), d(11, 15), 300, ['team:dev-team-3', 'dept:qa'])
+    ];
+
+    return epics;
 }
 
 function openAssignmentModal() {
