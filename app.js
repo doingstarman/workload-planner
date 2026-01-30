@@ -1341,7 +1341,7 @@ function renderProjectsGantt(startDate, endDate) {
             label: `${epic.key}`,
             bars: [
                 {
-                    label: epic.summary,
+                    label: `${epic.summary} (${getEpicStatusLabel(epic)})`,
                     meta: `${epic.spentHours.toFixed(1)} ч`,
                     start: epic.startDate,
                     end: epic.endDate,
@@ -1384,7 +1384,9 @@ function renderDepartmentsGantt(startDate, endDate) {
             return departments.some(d => d.id === dept.id);
         });
 
-        if (relatedEpics.length === 0) return null;
+        if (relatedEpics.length === 0) {
+            return { label: dept.name, bars: [] };
+        }
 
         const start = new Date(Math.min(...relatedEpics.map(e => e.startDate?.getTime() || Date.now())));
         const end = new Date(Math.max(...relatedEpics.map(e => e.endDate?.getTime() || Date.now())));
@@ -1397,7 +1399,7 @@ function renderDepartmentsGantt(startDate, endDate) {
         }];
 
         return { label: dept.name, bars };
-    }).filter(Boolean);
+    });
 
     renderGenericGantt('jira-departments-gantt', rows, startDate, endDate);
 }
@@ -1435,8 +1437,10 @@ function getEpicDepartments(epic, deptMapping, settings, teams = []) {
         ? [...new Set(teams.map(t => t.departmentId))].map(id => orgDepartments.find(d => d.id === id)).filter(Boolean)
         : [];
 
-    if (derived.length > 0) return derived;
-    return orgDepartments.filter(dept => matchEpic(epic, deptMapping[dept.id], settings.mappingMode));
+    const explicit = orgDepartments.filter(dept => matchEpic(epic, deptMapping[dept.id], settings.mappingMode));
+    const union = [...derived, ...explicit.filter(dept => !derived.some(d => d.id === dept.id))];
+
+    return union;
 }
 
 function matchEpic(epic, mappingValue, mode) {
@@ -1448,6 +1452,16 @@ function matchEpic(epic, mappingValue, mode) {
         return epic.projectKey === mappingValue || epic.projectName === mappingValue;
     }
     return epic.labels.includes(mappingValue);
+}
+
+function getEpicStatusLabel(epic) {
+    if (epic.labels.includes('status:pause')) return 'пауза';
+    if (epic.labels.includes('status:release')) return 'релиз';
+    if (epic.labels.includes('dept:product')) return 'продуктовый отдел';
+    if (epic.labels.includes('dept:analytics')) return 'отдел аналитики';
+    if (epic.labels.includes('dept:qa')) return 'тестирование';
+    if (epic.labels.some(label => label.startsWith('team:'))) return 'разработка';
+    return 'разработка';
 }
 
 async function searchJiraEpics(settings) {
@@ -1579,9 +1593,23 @@ function buildJiraDemoEpics() {
         const endDate = new Date(startDate);
         endDate.setDate(endDate.getDate() + durationDays);
 
-        const team = orgTeams[rand(0, orgTeams.length - 1)];
-        const deptLabel = rand(0, 3) === 0 ? [orgDepartments[rand(0, orgDepartments.length - 1)]] : [];
-        const labels = [`team:${team.id}`, ...deptLabel.map(dpt => `dept:${dpt.id}`)];
+        let deptType = 'dev';
+        if (i < 3) {
+            deptType = ['analytics', 'product', 'qa'][i];
+        } else if (rand(0, 4) === 0) {
+            deptType = ['analytics', 'product', 'qa'][rand(0, 2)];
+        }
+
+        const labels = [];
+        if (deptType === 'dev') {
+            const team = orgTeams[rand(0, orgTeams.length - 1)];
+            labels.push(`team:${team.id}`);
+        } else {
+            labels.push(`dept:${deptType}`);
+        }
+
+        if (rand(0, 12) === 0) labels.push('status:pause');
+        if (rand(0, 12) === 1) labels.push('status:release');
 
         epics.push({
             id: `demo-${i + 1}`,
