@@ -1,7 +1,5 @@
-# Node / package managers
+﻿# Node / package managers
 node_modules/
-client/node_modules/
-server/node_modules/
 
 # Logs
 *.log
@@ -14,7 +12,6 @@ Thumbs.db
 
 # Env
 .env
-.env.local
 
 # Python
 __pycache__/
