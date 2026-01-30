@@ -15,7 +15,7 @@ const jiraDefaults = {
     endField: 'duedate',
     hoursField: 'aggregatetimespent',
     mappingMode: 'labels',
-    hoursInSeconds: true
+    hoursInSeconds: false
 };
 
 const jiraState = {
@@ -1037,6 +1037,7 @@ function initJiraSection() {
     applyJiraSettingsToForm(settings);
     renderJiraMappings();
     setJiraPreset('year');
+    loadJiraDemoData();
 
     const startInput = document.getElementById('jira-start-date');
     const endInput = document.getElementById('jira-end-date');
@@ -1061,39 +1062,11 @@ function saveJiraSettings() {
 }
 
 function applyJiraSettingsToForm(settings) {
-    const baseUrl = document.getElementById('jira-base-url');
-    const username = document.getElementById('jira-username');
-    const token = document.getElementById('jira-token');
-    const jql = document.getElementById('jira-jql');
-    const startField = document.getElementById('jira-start-field');
-    const endField = document.getElementById('jira-end-field');
-    const hoursField = document.getElementById('jira-hours-field');
-    const mappingMode = document.getElementById('jira-mapping-mode');
-    const hoursInSeconds = document.getElementById('jira-hours-seconds');
-
-    if (baseUrl) baseUrl.value = settings.baseUrl;
-    if (username) username.value = settings.username;
-    if (token) token.value = settings.token;
-    if (jql) jql.value = settings.jql;
-    if (startField) startField.value = settings.startField;
-    if (endField) endField.value = settings.endField;
-    if (hoursField) hoursField.value = settings.hoursField;
-    if (mappingMode) mappingMode.value = settings.mappingMode;
-    if (hoursInSeconds) hoursInSeconds.checked = settings.hoursInSeconds;
+    return settings;
 }
 
 function readJiraSettingsFromForm() {
-    return {
-        baseUrl: document.getElementById('jira-base-url')?.value.trim(),
-        username: document.getElementById('jira-username')?.value.trim(),
-        token: document.getElementById('jira-token')?.value.trim(),
-        jql: document.getElementById('jira-jql')?.value.trim() || jiraDefaults.jql,
-        startField: document.getElementById('jira-start-field')?.value.trim(),
-        endField: document.getElementById('jira-end-field')?.value.trim() || 'duedate',
-        hoursField: document.getElementById('jira-hours-field')?.value.trim() || 'aggregatetimespent',
-        mappingMode: document.getElementById('jira-mapping-mode')?.value || 'labels',
-        hoursInSeconds: !!document.getElementById('jira-hours-seconds')?.checked
-    };
+    return { ...jiraDefaults };
 }
 
 function showJiraStatus(message, type = 'info') {
@@ -1224,49 +1197,6 @@ function getJiraPeriod(epics = []) {
 
     if (endDate < startDate) endDate = new Date(startDate);
     return { startDate, endDate };
-}
-
-async function testJiraConnection() {
-    try {
-        const settings = readJiraSettingsFromForm();
-        if (!settings.baseUrl) {
-            showJiraStatus('Укажите Base URL', 'error');
-            return;
-        }
-        await jiraFetch(`${settings.baseUrl}/rest/api/2/serverInfo`, settings);
-        showJiraStatus('Подключение успешно');
-    } catch (error) {
-        showJiraStatus('Ошибка подключения', 'error');
-    }
-}
-
-async function loadJiraData() {
-    try {
-        const settings = readJiraSettingsFromForm();
-        if (!settings.baseUrl) {
-            showJiraStatus('Укажите Base URL', 'error');
-            return;
-        }
-
-        saveJiraSettings();
-        showJiraStatus('Загрузка...');
-        jiraState.loading = true;
-
-        const epics = await searchJiraEpics(settings);
-        jiraState.epics = epics;
-        jiraState.selectedEpicKeys = new Set(epics.map(e => e.key));
-        jiraState.lastSync = new Date();
-        jiraState.error = null;
-        jiraState.loading = false;
-
-        showJiraStatus(`Загружено эпиков: ${epics.length}`);
-        renderJiraSection();
-    } catch (error) {
-        jiraState.loading = false;
-        jiraState.error = error;
-        showJiraStatus('Ошибка загрузки', 'error');
-        renderJiraSection();
-    }
 }
 
 function loadJiraDemoData() {
@@ -1614,39 +1544,60 @@ function normalizeJiraHours(raw, inSeconds) {
 
 function buildJiraDemoEpics() {
     const year = new Date().getFullYear();
+    const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+    const randFloat = (min, max) => Math.round((Math.random() * (max - min) + min) * 10) / 10;
     const d = (month, day) => new Date(year, month - 1, day);
 
-    const makeEpic = (idx, key, summary, start, end, hours, labels = [], components = []) => ({
-        id: `demo-${idx}`,
-        key,
-        summary,
-        status: 'In Progress',
-        priority: 'Medium',
-        startDate: start,
-        endDate: end,
-        labels,
-        components,
-        projectKey: 'PLN',
-        projectName: 'Workload Planner',
-        spentHours: hours
-    });
-
-    const epics = [
-        makeEpic(1, 'PLN-101', 'Refactor Platform Core', d(1, 10), d(3, 25), 420, ['team:dev-team-1']),
-        makeEpic(2, 'PLN-102', 'Billing API Upgrade', d(3, 28), d(6, 15), 520, ['team:dev-team-1']),
-        makeEpic(3, 'PLN-201', 'Mobile UX Refresh', d(2, 5), d(4, 30), 380, ['team:dev-team-2']),
-        makeEpic(4, 'PLN-202', 'Mobile Payments', d(5, 3), d(8, 20), 610, ['team:dev-team-2']),
-        makeEpic(5, 'PLN-301', 'Analytics Warehouse', d(1, 20), d(5, 10), 700, ['team:dev-team-3', 'dept:analytics']),
-        makeEpic(6, 'PLN-401', 'Partner Integrations', d(4, 1), d(7, 5), 560, ['team:dev-team-4']),
-        makeEpic(7, 'PLN-402', 'Legacy Migration Phase 2', d(7, 10), d(10, 30), 780, ['team:dev-team-4']),
-        makeEpic(8, 'PLN-501', 'Search Platform', d(7, 15), d(10, 31), 640, ['team:dev-team-5']),
-        makeEpic(9, 'PLN-601', 'Infra Modernization', d(9, 1), d(12, 20), 560, ['team:dev-team-6']),
-        makeEpic(10, 'PLN-701', 'AI Assistant Beta', d(2, 1), d(12, 15), 980, ['team:dev-team-7']),
-        makeEpic(11, 'ANL-10', 'Customer Insights H1', d(1, 15), d(6, 30), 320, ['dept:analytics']),
-        makeEpic(12, 'PRD-22', 'Product Discovery 2026', d(1, 10), d(12, 20), 260, ['dept:product']),
-        makeEpic(13, 'QA-15', 'QA Automation Program', d(2, 10), d(11, 30), 540, ['dept:qa']),
-        makeEpic(14, 'PLN-777', 'Release Stabilization', d(9, 15), d(11, 15), 300, ['team:dev-team-3', 'dept:qa'])
+    const summaries = [
+        'Platform Core Upgrade',
+        'Billing API Revamp',
+        'Mobile UX Refresh',
+        'Payments Flow',
+        'Analytics Warehouse',
+        'Partner Integrations',
+        'Legacy Migration',
+        'Search Platform',
+        'Infra Modernization',
+        'AI Assistant',
+        'Customer Insights',
+        'Product Discovery',
+        'QA Automation',
+        'Release Stabilization',
+        'Security Audit',
+        'Observability Initiative',
+        'Data Governance',
+        'Performance Optimization'
     ];
+
+    const epics = [];
+    const totalEpics = rand(12, 18);
+    for (let i = 0; i < totalEpics; i++) {
+        const startMonth = rand(1, 10);
+        const startDay = rand(1, 25);
+        const durationDays = rand(30, 140);
+        const startDate = d(startMonth, startDay);
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + durationDays);
+
+        const team = orgTeams[rand(0, orgTeams.length - 1)];
+        const deptLabel = rand(0, 3) === 0 ? [orgDepartments[rand(0, orgDepartments.length - 1)]] : [];
+        const labels = [`team:${team.id}`, ...deptLabel.map(dpt => `dept:${dpt.id}`)];
+
+        epics.push({
+            id: `demo-${i + 1}`,
+            key: `DEMO-${100 + i}`,
+            summary: summaries[i % summaries.length],
+            status: 'In Progress',
+            priority: ['Low', 'Medium', 'High'][rand(0, 2)],
+            startDate,
+            endDate,
+            labels,
+            components: [],
+            projectKey: 'DEMO',
+            projectName: 'Demo Jira',
+            spentHours: randFloat(120, 1200)
+        });
+    }
 
     return epics;
 }
